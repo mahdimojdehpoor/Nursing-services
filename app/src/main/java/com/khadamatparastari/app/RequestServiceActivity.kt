@@ -1,9 +1,14 @@
 package com.khadamatparastari.app
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Bundle
+import android.telephony.SmsManager
 import android.widget.CheckBox
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import com.khadamatparastari.app.databinding.ActivityRequestServiceBinding
 import java.text.NumberFormat
 import java.util.Locale
@@ -12,6 +17,18 @@ class RequestServiceActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityRequestServiceBinding
     private val PRICE_PER_SERVICE = 1_000_000
+    private val OWNER_PHONE_NUMBER = "09307674048"
+
+    private var pendingSmsBody: String? = null
+
+    private val requestSmsPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+            if (isGranted) {
+                pendingSmsBody?.let { sendSms(it) }
+            } else {
+                Toast.makeText(this, "بدون اجازه پیامک، امکان ارسال درخواست نیست", Toast.LENGTH_LONG).show()
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -22,38 +39,72 @@ class RequestServiceActivity : AppCompatActivity() {
         binding.tvSelectedService.text = "خدمت انتخابی: $serviceTitle"
 
         val checkBoxes = listOf(
-            binding.cbInjection,
-            binding.cbSerum,
-            binding.cbDressing,
-            binding.cbMassage,
-            binding.cbSuction,
-            binding.cbCatheter
+            binding.cbInjection to "تزریقات",
+            binding.cbSerum to "سرم درمانی",
+            binding.cbDressing to "پانسمان",
+            binding.cbMassage to "ماساژ",
+            binding.cbSuction to "ساکشن",
+            binding.cbCatheter to "سوند گذاری"
         )
 
-        checkBoxes.forEach { checkBox ->
+        checkBoxes.forEach { (checkBox, _) ->
             checkBox.setOnCheckedChangeListener { _, _ ->
-                updateTotalPrice(checkBoxes)
+                updateTotalPrice(checkBoxes.map { it.first })
             }
         }
 
         binding.btnSubmit.setOnClickListener {
             val name = binding.etName.text.toString().trim()
-            val phone = binding.etPhone.text.toString().trim()
+            val customerPhone = binding.etPhone.text.toString().trim()
             val address = binding.etAddress.text.toString().trim()
-            val selectedCount = checkBoxes.count { it.isChecked }
+            val selectedServices = checkBoxes.filter { it.first.isChecked }.map { it.second }
 
-            if (name.isEmpty() || phone.isEmpty() || address.isEmpty()) {
+            if (name.isEmpty() || customerPhone.isEmpty() || address.isEmpty()) {
                 Toast.makeText(this, "لطفاً همه فیلدها را پر کنید", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
-            if (selectedCount == 0) {
+            if (selectedServices.isEmpty()) {
                 Toast.makeText(this, "لطفاً حداقل یک خدمت را انتخاب کنید", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
-            Toast.makeText(this, "درخواست شما با موفقیت ثبت شد", Toast.LENGTH_LONG).show()
+            val totalPrice = selectedServices.size * PRICE_PER_SERVICE
+            val formattedPrice = NumberFormat.getNumberInstance(Locale("fa", "IR")).format(totalPrice)
+
+            val smsBody = buildString {
+                append("درخواست جدید خدمات پرستاری\n")
+                append("نام: $name\n")
+                append("شماره تماس مشتری: $customerPhone\n")
+                append("آدرس: $address\n")
+                append("خدمات: ${selectedServices.joinToString("، ")}\n")
+                append("مبلغ قابل پرداخت: $formattedPrice ریال")
+            }
+
+            sendSmsWithPermissionCheck(smsBody)
+        }
+    }
+
+    private fun sendSmsWithPermissionCheck(body: String) {
+        pendingSmsBody = body
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS)
+            == PackageManager.PERMISSION_GRANTED
+        ) {
+            sendSms(body)
+        } else {
+            requestSmsPermissionLauncher.launch(Manifest.permission.SEND_SMS)
+        }
+    }
+
+    private fun sendSms(body: String) {
+        try {
+            val smsManager = SmsManager.getDefault()
+            val parts = smsManager.divideMessage(body)
+            smsManager.sendMultipartTextMessage(OWNER_PHONE_NUMBER, null, parts, null, null)
+            Toast.makeText(this, "درخواست شما با موفقیت ارسال شد", Toast.LENGTH_LONG).show()
             finish()
+        } catch (e: Exception) {
+            Toast.makeText(this, "ارسال پیامک ناموفق بود، دوباره تلاش کنید", Toast.LENGTH_LONG).show()
         }
     }
 
