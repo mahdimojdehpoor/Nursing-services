@@ -1,12 +1,19 @@
 package com.khadamatparastari.app
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.telephony.SmsManager
 import android.widget.CheckBox
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.khadamatparastari.app.databinding.ActivityRequestServiceBinding
@@ -18,6 +25,7 @@ class RequestServiceActivity : AppCompatActivity() {
     private lateinit var binding: ActivityRequestServiceBinding
     private val PRICE_PER_SERVICE = 1_000_000
     private val OWNER_PHONE_NUMBER = "09307674048"
+    private val CARD_NUMBER = "5859831144131066"
 
     private var pendingSmsBody: String? = null
 
@@ -26,7 +34,16 @@ class RequestServiceActivity : AppCompatActivity() {
             if (isGranted) {
                 pendingSmsBody?.let { sendSms(it) }
             } else {
-                Toast.makeText(this, "بدون اجازه پیامک، امکان ارسال درخواست نیست", Toast.LENGTH_LONG).show()
+                AlertDialog.Builder(this)
+                    .setTitle("دسترسی پیامک لازم است")
+                    .setMessage("برای ثبت و اطلاع‌رسانی درخواست، دسترسی پیامک باید از تنظیمات گوشی فعال شود.")
+                    .setPositiveButton("رفتن به تنظیمات") { _, _ ->
+                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                        intent.data = Uri.fromParts("package", packageName, null)
+                        startActivity(intent)
+                    }
+                    .setNegativeButton("بستن", null)
+                    .show()
             }
         }
 
@@ -83,6 +100,15 @@ class RequestServiceActivity : AppCompatActivity() {
 
             sendSmsWithPermissionCheck(smsBody)
         }
+
+        binding.tvContactPhone.setOnClickListener { copyToClipboard("شماره تماس", OWNER_PHONE_NUMBER) }
+        binding.tvCardNumber.setOnClickListener { copyToClipboard("شماره کارت", CARD_NUMBER) }
+    }
+
+    private fun copyToClipboard(label: String, value: String) {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText(label, value))
+        Toast.makeText(this, "$label کپی شد", Toast.LENGTH_SHORT).show()
     }
 
     private fun sendSmsWithPermissionCheck(body: String) {
