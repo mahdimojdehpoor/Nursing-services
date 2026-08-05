@@ -1,21 +1,14 @@
 package com.khadamatparastari.app
 
-import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
-import android.provider.Settings
-import android.telephony.SmsManager
 import android.widget.CheckBox
 import android.widget.Toast
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
 import com.khadamatparastari.app.databinding.ActivityRequestServiceBinding
 import java.text.NumberFormat
 import java.util.Locale
@@ -26,26 +19,6 @@ class RequestServiceActivity : AppCompatActivity() {
     private val PRICE_PER_SERVICE = 1_000_000
     private val OWNER_PHONE_NUMBER = "09307674048"
     private val CARD_NUMBER = "5859831144131066"
-
-    private var pendingSmsBody: String? = null
-
-    private val requestSmsPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
-            if (isGranted) {
-                pendingSmsBody?.let { sendSms(it) }
-            } else {
-                AlertDialog.Builder(this)
-                    .setTitle("دسترسی پیامک لازم است")
-                    .setMessage("برای ثبت و اطلاع‌رسانی درخواست، دسترسی پیامک باید از تنظیمات گوشی فعال شود.")
-                    .setPositiveButton("رفتن به تنظیمات") { _, _ ->
-                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                        intent.data = Uri.fromParts("package", packageName, null)
-                        startActivity(intent)
-                    }
-                    .setNegativeButton("بستن", null)
-                    .show()
-            }
-        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -98,7 +71,7 @@ class RequestServiceActivity : AppCompatActivity() {
                 append("مبلغ قابل پرداخت: $formattedPrice ریال")
             }
 
-            sendSmsWithPermissionCheck(smsBody)
+            openSmsApp(smsBody)
         }
 
         binding.tvContactPhone.setOnClickListener { copyToClipboard("شماره تماس", OWNER_PHONE_NUMBER) }
@@ -111,26 +84,15 @@ class RequestServiceActivity : AppCompatActivity() {
         Toast.makeText(this, "$label کپی شد", Toast.LENGTH_SHORT).show()
     }
 
-    private fun sendSmsWithPermissionCheck(body: String) {
-        pendingSmsBody = body
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.SEND_SMS)
-            == PackageManager.PERMISSION_GRANTED
-        ) {
-            sendSms(body)
-        } else {
-            requestSmsPermissionLauncher.launch(Manifest.permission.SEND_SMS)
-        }
-    }
-
-    private fun sendSms(body: String) {
+    private fun openSmsApp(body: String) {
         try {
-            val smsManager = SmsManager.getDefault()
-            val parts = smsManager.divideMessage(body)
-            smsManager.sendMultipartTextMessage(OWNER_PHONE_NUMBER, null, parts, null, null)
-            Toast.makeText(this, "درخواست شما با موفقیت ارسال شد", Toast.LENGTH_LONG).show()
+            val intent = Intent(Intent.ACTION_SENDTO)
+            intent.data = Uri.parse("smsto:$OWNER_PHONE_NUMBER")
+            intent.putExtra("sms_body", body)
+            startActivity(intent)
             finish()
         } catch (e: Exception) {
-            Toast.makeText(this, "ارسال پیامک ناموفق بود، دوباره تلاش کنید", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "اپ پیامک روی این گوشی پیدا نشد", Toast.LENGTH_LONG).show()
         }
     }
 
